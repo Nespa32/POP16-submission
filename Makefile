@@ -13,9 +13,9 @@ endif
 ## Makefile code ##
 CC = gcc
 
-CFLAGS = -lm -Wall -Wextra -fmax-errors=10
+CFLAGS = -lm -Wall -Wextra -fmax-errors=10 -pthread
 CSTD = --std=gnu11
-JACOBI_FLAGS = 
+JACOBI_FLAGS = -O3
 
 SRCS = timer.c himeno_contest.c main.c
 OBJS = $(SRCS:.c=.o)
