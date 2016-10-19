@@ -3,4 +3,6 @@
 *.out
 *.swp
 *.dat
+*.data
+*.old
 himeno
