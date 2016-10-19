@@ -1,4 +1,5 @@
 #include "himeno_contest.h"
+#include <unistd.h>
 #include "pthread.h"
 
 /** SOLUTION
@@ -22,6 +23,8 @@ typedef struct
     int startIdx;
     int endIdx;
     float gosa;
+    pthread_cond_t cond_var;
+    pthread_mutex_t cond_var_lock;
 } t_args;
 
 // globals, just for ease of use
@@ -33,14 +36,20 @@ Matrix* mat_bnd;
 Matrix* mat_wrk1;
 Matrix* mat_wrk2;
 
+pthread_mutex_t thread_count_lock;
+int done_thread_count = 0;
+
 void *threadWorker(void* args)
 {
     float const omega = 0.8;
 
+    t_args* t = (t_args*)args;
+
+    while (true)
+    {
     int const jmax = mat_p->mcols - 1;
     int const kmax = mat_p->mdeps - 1;
 
-    t_args* t = (t_args*)args;
     int const startIdx = t->startIdx;
     int const endIdx = t->endIdx;
     float gosa = 0.0f;
@@ -78,8 +87,17 @@ void *threadWorker(void* args)
         }
     }
 
-    printf("startIdx %d, endIdx %d, gosa %f\n", startIdx, endIdx, gosa);
-    t->gosa = gosa;
+        t->gosa = gosa;
+
+        {
+            pthread_mutex_lock(&thread_count_lock);
+            ++done_thread_count;
+            pthread_mutex_unlock(&thread_count_lock);
+        }
+
+        pthread_cond_wait(&t->cond_var, &t->cond_var_lock);
+    }
+
     return NULL;
 }
 
@@ -89,6 +107,7 @@ void *threadWorker(void* args)
 float jacobi(Matrix *a, Matrix *b, Matrix *c, Matrix *p, Matrix *bnd,
     Matrix *wrk1, Matrix *wrk2) {
 
+    printf("Call 1\n");
     mat_a = a;
     mat_b = b;
     mat_c = c;
@@ -97,10 +116,10 @@ float jacobi(Matrix *a, Matrix *b, Matrix *c, Matrix *p, Matrix *bnd,
     mat_wrk1 = wrk1;
     mat_wrk2 = wrk2;
 
-    float gosa = 0.0f;
-
-    pthread_t threads[THREAD_COUNT];
-    t_args thread_args[THREAD_COUNT];
+    static float gosa = 0.0f;
+    static int is_pool_init = 0;
+    static pthread_t threads[THREAD_COUNT];
+    static t_args thread_args[THREAD_COUNT];
 
     if (p->mrows % THREAD_COUNT != 0)
     {
@@ -120,13 +139,32 @@ float jacobi(Matrix *a, Matrix *b, Matrix *c, Matrix *p, Matrix *bnd,
     thread_args[0].startIdx = 1;
     thread_args[THREAD_COUNT - 1].endIdx = p->mrows - 1;
 
-    // thread work
-    for (int i = 0; i < THREAD_COUNT; ++i)
-        pthread_create(&threads[i], NULL, threadWorker, (void*)(&thread_args[i]));
+    // init/activate threads
+    done_thread_count = 0;
+    if (is_pool_init == 0)
+    {
+        is_pool_init = 1;
+        for (int i = 0; i < THREAD_COUNT; ++i)
+        {
+            pthread_cond_init(&thread_args[i].cond_var, NULL);
+            pthread_mutex_init(&thread_args[i].cond_var_lock, NULL);
+            pthread_create(&threads[i], NULL, threadWorker, (void*)(&thread_args[i]));
+        }
+    }
+    else
+    {
+        // poke threads for a new job
+        for (int i = 0; i < THREAD_COUNT; ++i)
+            pthread_cond_signal(&thread_args[i].cond_var);
+    }
+
+    // 'busy' wait
+    while (done_thread_count < THREAD_COUNT)
+        usleep(1000);
 
     for (int i = 0; i < THREAD_COUNT; ++i)
     {
-        pthread_join(threads[i], NULL);
+        printf("thread %d: gosa %f\n", i, thread_args[i].gosa);
         gosa += thread_args[i].gosa;
     }
 
