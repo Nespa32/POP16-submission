@@ -1,4 +1,5 @@
 *.gz
 *.o
 *.out
+*.swp
 himeno
