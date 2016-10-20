@@ -13,7 +13,7 @@ endif
 ## Makefile code ##
 CC = gcc
 
-CFLAGS = -lm -Wall -Wextra -fmax-errors=10 -pthread -ggdb
+CFLAGS = -lm -Wall -Wextra -fmax-errors=10 -pthread
 CSTD = --std=gnu11
 JACOBI_FLAGS = -O3
 
